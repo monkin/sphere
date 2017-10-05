@@ -283,7 +283,7 @@ const combinators = [
     //cMix1,
     //cMixN,
     cMixQuad,
-    cMixPower
+    //cMixPower
 ];
 
 function cMix1(d, a, b) {
