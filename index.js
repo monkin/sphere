@@ -114,7 +114,7 @@ function easing(time) {
 setTimeout(async function() {
     let start = Date.now();
     while (true) {
-        let texture = tScale(3, randomTexture(3, 30));
+        let texture = tScale(3, randomTexture(3, 20));
         program.update(`
             attribute vec2 a_point;
             varying vec2 v_point;
