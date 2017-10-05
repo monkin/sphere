@@ -31,7 +31,7 @@ gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), g
 
 function createStage() {
     const start = Date.now(),
-        STAGE_DURATION = 5000;
+        STAGE_DURATION = 1000;
     let now = start;
     return {
         next() {
@@ -102,19 +102,36 @@ const program = (function() {
 
 
 function easing(time) {
-    const SWITCH_TIME = 1 / 3;
+    const SWITCH_TIME = 1 / 2;
     if (time < SWITCH_TIME) {
         const t = time / SWITCH_TIME;
-        return (t < 0.5 ? 2 * t * t : (4 - 2 * t) * t - 1) * SWITCH_TIME;
+        return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) *t;
     } else {
         return 1;
     }
 }
 
+const INITIAL_RENDER_PARAMETERS = {
+    lib: `vec3 color_fn(vec2 point) { return vec3(0.5, 0.5, 0.5); }`,
+    color: "color_fn"
+};
+
+function generateRenderParameters() {
+    let color = tScale(3, randomTexture(3, 30));
+    return {
+        lib: color.lib,
+        color: color.fn
+    };
+}
+
 setTimeout(async function() {
-    let start = Date.now();
+    let start = Date.now(),
+        p1 = INITIAL_RENDER_PARAMETERS,
+        p2 = INITIAL_RENDER_PARAMETERS;
+        
     while (true) {
-        let texture = tScale(3, randomTexture(3, 20));
+        p1 = p2;
+        p2 = generateRenderParameters();
         program.update(`
             attribute vec2 a_point;
             varying vec2 v_point;
@@ -128,17 +145,21 @@ setTimeout(async function() {
         `, `
             precision highp float;
             varying vec2 v_point;
+            uniform float u_transition;
             float mirror(float v) { float x = mod(mod(v, 2.0) + 2.0, 2.0); return x > 1.0 ? 2.0 - x : x; }
             vec2 mirror(vec2 v) { return vec2(mirror(v.x), mirror(v.y)); }
             vec3 mirror(vec3 v) { return vec3(mirror(v.x), mirror(v.y), mirror(v.z)); }
-            ${texture.lib}
+            ${p1.lib}
+            ${p2.lib}
             void main() {
-                gl_FragColor = vec4(mirror(${texture.fn}(v_point * 0.5 + 0.5)), 1);
+                vec2 p = v_point * 0.5 + 0.5;
+                gl_FragColor = vec4(mix(${p1.color}(p), ${p2.color}(p), vec3(u_transition)), 1);
             }
         `);
         const stage = createStage(),
             prog = program.handle,
-            ratioLocation = gl.getUniformLocation(prog, "u_ratio");
+            ratioLocation = gl.getUniformLocation(prog, "u_ratio"),
+            transitionLocation = gl.getUniformLocation(prog, "u_transition");
         while (await stage.next()) {
             resize();
             const time = Date.now() - start,
@@ -147,6 +168,7 @@ setTimeout(async function() {
             gl.clear(gl.COLOR_BUFFER_BIT);
             
             gl.uniform1f(ratioLocation, ratio);
+            gl.uniform1f(transitionLocation, transition);
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
         }
     }
@@ -261,7 +283,7 @@ const combinators = [
     //cMix1,
     //cMixN,
     cMixQuad,
-    //cMixPower
+    cMixPower
 ];
 
 function cMix1(d, a, b) {
