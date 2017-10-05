@@ -114,7 +114,7 @@ function easing(time) {
 setTimeout(async function() {
     let start = Date.now();
     while (true) {
-        let texture = randomTexture(3, 30);
+        let texture = tScale(3, randomTexture(3, 30));
         program.update(`
             attribute vec2 a_point;
             varying vec2 v_point;
@@ -122,18 +122,18 @@ setTimeout(async function() {
             void main() {
                 v_point = a_point;
                 gl_Position = u_ratio > 1.0
-                        ? vec4(a_point.x / u_ratio * 0.75, a_point.y * 0.75, 0, 1)
-                        : vec4(a_point.x * 0.75, a_point.y * u_ratio * 0.75, 0, 1);
+                        ? vec4(a_point.x / u_ratio * 0.85, a_point.y * 0.85, 0, 1)
+                        : vec4(a_point.x * 0.85, a_point.y * u_ratio * 0.85, 0, 1);
             }
         `, `
             precision highp float;
             varying vec2 v_point;
-            float mirror(float v) { float x = mod(v, 2.0); return x > 1.0 ? 2.0 - x : x; }
+            float mirror(float v) { float x = mod(mod(v, 2.0) + 2.0, 2.0); return x > 1.0 ? 2.0 - x : x; }
             vec2 mirror(vec2 v) { return vec2(mirror(v.x), mirror(v.y)); }
             vec3 mirror(vec3 v) { return vec3(mirror(v.x), mirror(v.y), mirror(v.z)); }
             ${texture.lib}
             void main() {
-                gl_FragColor = vec4(${texture.fn}(v_point * 0.5 + 0.5), 1);
+                gl_FragColor = vec4(mirror(${texture.fn}(v_point * 0.5 + 0.5)), 1);
             }
         `);
         const stage = createStage(),
@@ -210,8 +210,8 @@ function randomTexture(dimentions, complexity) {
         return randomConstant(dimentions);
     } else {
         let r = Math.random();
-        if (r < 0.33 && complexity > 10) {
-            if (Math.random() < 0.5) {
+        if (r < 0.5 && complexity > 10) {
+            if (Math.random() < 0.99) {
                 const a = randomTexture(dimentions, complexity / 2),
                     b = randomTexture(dimentions, complexity / 2),
                     alpha = randomTexture(1, complexity / 2);
@@ -221,7 +221,7 @@ function randomTexture(dimentions, complexity) {
                     point = randomTexture(2, complexity / 2);
                 return displace(dimentions, v, point);
             }
-        } else if (r < 0.66 && complexity > 3) {
+        } else if (r < 0.75 && complexity > 3) {
             return select(transformers)(dimentions, randomTexture(dimentions, complexity - 1));
         } else {
             const a = randomTexture(dimentions, complexity / 2),
@@ -259,7 +259,7 @@ function blend(d, a, b, alpha) {
 
 const combinators = [
     //cMix1,
-    cMixN,
+    //cMixN,
     cMixQuad,
     //cMixPower
 ];
@@ -292,7 +292,7 @@ function cMixQuad(d, a, b) {
     const f = `mixQuad_${nextId()}`,
         t = type(d),
         m = Math.random(),
-        v = `p.x * ${m.toFixed(6)} + p.y * ${(1 - m).toFixed(6)} - 0.5`;
+        v = `mirror(p.x * ${m.toFixed(6)} + p.y * ${(1 - m).toFixed(6)} - 0.5)`;
     return {
         fn: f,
         lib: `${a.lib}\n${b.lib}\n${t} ${f}(vec2 p) { float v = ${v}; float w = v * v * 4.0; return ${a.fn}(p) * w + ${b.fn}(p) * (1.0 - w); }`
@@ -325,7 +325,7 @@ function tShift(d, fn) {
         t = type(d);
     return {
         fn: f,
-        lib: `${fn.lib}\n${t} ${f}(vec2 p) { return ${fn.fn}(mirror(p + ${random(2)})); }`
+        lib: `${fn.lib}\n${t} ${f}(vec2 p) { return ${fn.fn}(/*mirror*/(p + ${random(2)})); }`
     };
 }
 
@@ -335,8 +335,8 @@ function tRotate(d, fn) {
         a = Math.random() * Math.PI,
         s = Math.sin(a),
         c = Math.cos(a),
-        x = `mirror(p.x * (${c.toFixed(6)}) + p.y * (${s.toFixed(6)}) + 2.0)`,
-        y = `mirror(p.y * (${c.toFixed(6)}) - p.x * (${s.toFixed(6)}) + 2.0)`;
+        x = `/*mirror*/(p.x * (${c.toFixed(6)}) + p.y * (${s.toFixed(6)}) + 2.0)`,
+        y = `/*mirror*/(p.y * (${c.toFixed(6)}) - p.x * (${s.toFixed(6)}) + 2.0)`;
     return {
         fn: f,
         lib: `${fn.lib}\n${t} ${f}(vec2 p) { return ${fn.fn}(vec2(${x}, ${y})); }`
