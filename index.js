@@ -1,4 +1,5 @@
 const canvas = document.querySelector("canvas");
+
 let resizeRequested = true,
     ratio = 1,
     width = 0,
@@ -23,9 +24,11 @@ function resize() {
 }
 window.addEventListener("resize", () => resizeRequested = true);
 
-const gl = canvas.getContext("webgl", { antialias: false, depth: false }),
+const gl = canvas.getContext("webgl", { antialias: false, depth: false, premultipliedAlpha: false }),
     points = gl.createBuffer();
 
+gl.enable(gl.BLEND);
+gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 gl.bindBuffer(gl.ARRAY_BUFFER, points);
 gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
 
@@ -146,20 +149,31 @@ setTimeout(async function() {
             precision highp float;
             varying vec2 v_point;
             uniform float u_transition;
+            uniform float u_pixelSize;
             float mirror(float v) { float x = mod(mod(v, 2.0) + 2.0, 2.0); return x > 1.0 ? 2.0 - x : x; }
             vec2 mirror(vec2 v) { return vec2(mirror(v.x), mirror(v.y)); }
             vec3 mirror(vec3 v) { return vec3(mirror(v.x), mirror(v.y), mirror(v.z)); }
             ${p1.lib}
             ${p2.lib}
             void main() {
-                vec2 p = v_point * 0.5 + 0.5;
-                gl_FragColor = vec4(mix(${p1.color}(p), ${p2.color}(p), vec3(u_transition)), 1);
+                float delta = length(v_point);
+                if (delta < 1.0) {
+                    vec2 p = v_point * 0.5 + 0.5;
+                    vec3 point = vec3(v_point, 1.0 - length(v_point));
+                    vec3 light = normalize(vec3(0, -2, -4) - point);
+                    float alpha = (1.0 - delta) < u_pixelSize ? (1.0 - delta) / u_pixelSize : 1.0;
+                    vec3 color = mix(${p1.color}(p), ${p2.color}(p), vec3(u_transition));
+                    gl_FragColor = vec4(pow(color, vec3(1.0 / 2.2)), alpha);
+                } else {
+                    gl_FragColor = vec4(0);
+                }
             }
         `);
         const stage = createStage(),
             prog = program.handle,
             ratioLocation = gl.getUniformLocation(prog, "u_ratio"),
-            transitionLocation = gl.getUniformLocation(prog, "u_transition");
+            transitionLocation = gl.getUniformLocation(prog, "u_transition"),
+            pixelSizeLocation = gl.getUniformLocation(prog, "u_pixelSize");
         while (await stage.next()) {
             resize();
             const time = Date.now() - start,
@@ -169,6 +183,7 @@ setTimeout(async function() {
             
             gl.uniform1f(ratioLocation, ratio);
             gl.uniform1f(transitionLocation, transition);
+            gl.uniform1f(pixelSizeLocation, 1 / (Math.min(width, height) * 0.75));
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
         }
     }
