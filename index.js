@@ -34,7 +34,7 @@ gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), g
 
 function createStage() {
     const start = Date.now(),
-        STAGE_DURATION = 1000;
+        STAGE_DURATION = 5000;
     let now = start;
     return {
         next() {
@@ -55,54 +55,38 @@ function createStage() {
     };
 }
 
-const program = (function() {
-    let program = null,
-        vshader = null,
-        fshader = null;
-    return {
-        get handle() {
-            return program;
-        },
-        update(vertex, fragment) {
-            program && gl.deleteProgram(program);
-            vshader && gl.deleteShader(vshader);
-            fshader && gl.deleteShader(fshader);
+function compile() {
+    let vshader = gl.createShader(gl.VERTEX_SHADER),
+        fshader = gl.createShader(gl.FRAGMENT_SHADER),
+        program = gl.createProgram();
 
-            vshader = gl.createShader(gl.VERTEX_SHADER);
-            fshader = gl.createShader(gl.FRAGMENT_SHADER);
-            program = gl.createProgram();
+    gl.shaderSource(vshader, vertexSource);
+    gl.compileShader(vshader);
 
-            gl.useProgram(null);
+    gl.shaderSource(fshader, fragmentSource);
+    gl.compileShader(fshader);
+    
+    gl.attachShader(program, vshader);
+    gl.attachShader(program, fshader);
+    gl.linkProgram(program);
 
-            gl.shaderSource(vshader, vertex);
-            gl.compileShader(vshader);
-            if (!gl.getShaderParameter(vshader, gl.COMPILE_STATUS)) {
-                throw new Error("Error compiling vertex shader: " + gl.getShaderInfoLog(vshader) + "\n" + vertex);
-            }
+    if (!gl.getShaderParameter(vshader, gl.COMPILE_STATUS)) {
+        throw new Error("Error compiling vertex shader: " + gl.getShaderInfoLog(vshader) + "\n" + vertexSource);
+    }
+    if (!gl.getShaderParameter(fshader, gl.COMPILE_STATUS)) {
+        throw new Error("Error compiling fragment shader: " + gl.getShaderInfoLog(fshader) + "\n" + fragmentSource);
+    }
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+        throw new Error("Error linking shaders: " + gl.getProgramInfoLog(program) + "\n" + vertexSource + "\n---\n" + fragmentSource);
+    }
 
-            gl.shaderSource(fshader, fragment);
-            gl.compileShader(fshader);
-            if (!gl.getShaderParameter(fshader, gl.COMPILE_STATUS)) {
-                throw new Error("Error compiling fragment shader: " + gl.getShaderInfoLog(fshader) + "\n" + fragment);
-            }
+    const position = gl.getAttribLocation(program, "a_point");
+    gl.enableVertexAttribArray(position);
+    gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
 
-            gl.attachShader(program, vshader);
-            gl.attachShader(program, fshader);
-            gl.linkProgram(program);
-
-            if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-                throw new Error("Error linking shaders: " + gl.getProgramInfoLog(program) + "\n" + vertex + "\n---\n" + fragment);
-            }
-
-            const position = gl.getAttribLocation(program, "a_point");
-            gl.enableVertexAttribArray(position);
-            gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
-
-            gl.useProgram(program);
-        }
-    };
-})();
-
+    gl.useProgram(program);
+    return program;
+}
 
 function easing(time) {
     const SWITCH_TIME = 1 / 2;
@@ -114,277 +98,121 @@ function easing(time) {
     }
 }
 
-const INITIAL_RENDER_PARAMETERS = {
-    lib: `vec3 color_fn(vec2 point) { return vec3(0.5, 0.5, 0.5); }`,
-    color: "color_fn"
-};
+function mix(a, b, v) {
+    let r = [];
+    for (let i = 0; i < a.length; i++) {
+        r[i] = a[i] * (1 - v) + b[i] * v;
+    }
+    return r;
+}
 
-function generateRenderParameters() {
-    let color = tScale(3, randomTexture(3, 30));
-    return {
-        lib: color.lib,
-        color: color.fn
-    };
+function randomSeed() {
+    let r = [];
+    for (let i = 0; i < 64; i++) {
+        r[i] = Math.random();
+    }
+    return r;
 }
 
 setTimeout(async function() {
-    let start = Date.now(),
-        p1 = INITIAL_RENDER_PARAMETERS,
-        p2 = INITIAL_RENDER_PARAMETERS;
-        
+    let program = compile(),
+        ratioLocation = gl.getUniformLocation(program, "u_ratio"),
+        pixelSizeLocation = gl.getUniformLocation(program, "u_pixelSize"),
+        timeLocation = gl.getUniformLocation(program, "u_time"),
+        seedLocation = gl.getUniformLocation(program, `u_seed`),
+        seedLocations = [],
+        start = Date.now(),
+        seed1 = randomSeed(),
+        seed2 = randomSeed();
+
     while (true) {
-        p1 = p2;
-        p2 = generateRenderParameters();
-        program.update(`
-            attribute vec2 a_point;
-            varying vec2 v_point;
-            uniform float u_ratio;
-            void main() {
-                v_point = a_point;
-                gl_Position = u_ratio > 1.0
-                        ? vec4(a_point.x / u_ratio * 0.85, a_point.y * 0.85, 0, 1)
-                        : vec4(a_point.x * 0.85, a_point.y * u_ratio * 0.85, 0, 1);
-            }
-        `, `
-            precision highp float;
-            varying vec2 v_point;
-            uniform float u_transition;
-            uniform float u_pixelSize;
-            float mirror(float v) { float x = mod(mod(v, 2.0) + 2.0, 2.0); return x > 1.0 ? 2.0 - x : x; }
-            vec2 mirror(vec2 v) { return vec2(mirror(v.x), mirror(v.y)); }
-            vec3 mirror(vec3 v) { return vec3(mirror(v.x), mirror(v.y), mirror(v.z)); }
-            ${p1.lib}
-            ${p2.lib}
-            void main() {
-                float delta = length(v_point);
-                if (delta < 1.0) {
-                    vec2 p = v_point * 0.5 + 0.5;
-                    vec3 point = vec3(v_point, 1.0 - length(v_point));
-                    vec3 light = normalize(vec3(0, -2, -4) - point);
-                    float alpha = (1.0 - delta) < u_pixelSize ? (1.0 - delta) / u_pixelSize : 1.0;
-                    vec3 color = mix(${p1.color}(p), ${p2.color}(p), vec3(u_transition));
-                    gl_FragColor = vec4(pow(color, vec3(1.0 / 2.2)), alpha);
-                } else {
-                    gl_FragColor = vec4(0);
-                }
-            }
-        `);
-        const stage = createStage(),
-            prog = program.handle,
-            ratioLocation = gl.getUniformLocation(prog, "u_ratio"),
-            transitionLocation = gl.getUniformLocation(prog, "u_transition"),
-            pixelSizeLocation = gl.getUniformLocation(prog, "u_pixelSize");
+        const stage = createStage();
+
+        seed1 = seed2;
+        seed2 = randomSeed();
+
         while (await stage.next()) {
             resize();
-            const time = Date.now() - start,
-                transition = easing(stage.time());
+            const time = Date.now() - start;
             gl.clearColor(0.9, 0.9, 0.9, 1);
             gl.clear(gl.COLOR_BUFFER_BIT);
             
             gl.uniform1f(ratioLocation, ratio);
-            gl.uniform1f(transitionLocation, transition);
             gl.uniform1f(pixelSizeLocation, 1 / (Math.min(width, height) * 0.75));
+            gl.uniform1f(timeLocation, time);
+
+            gl.uniform1fv(seedLocation, mix(seed1, seed2, easing(stage.time())));
+
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
         }
     }
 });
 
-////////////////////////////////////////////////
-// Generators
-////////////////////////////////////////////////
+const vertexSource = `
+attribute vec2 a_point;
+varying vec2 v_point;
+uniform float u_ratio;
+void main() {
+    v_point = a_point;
+    gl_Position = u_ratio > 1.0
+            ? vec4(a_point.x / u_ratio * 0.85, a_point.y * 0.85, 0, 1)
+            : vec4(a_point.x * 0.85, a_point.y * u_ratio * 0.85, 0, 1);
+}`;
 
-let nextId = (() => {
-    let counter = 0;
-    return () => `x${(counter++).toFixed(0)}`;
-})();
+const fragmentSource = `
+precision highp float;
+varying vec2 v_point;
+uniform float u_time;
+uniform float u_pixelSize;
+uniform float u_seed[64];
 
-function type(d) {
-    if (d === 1) {
-        return "float";
-    } else {
-        return `vec${d}`;
-    }
+#define M_PI 3.1415926535897932384626433832795
+
+float mirror(float v) { float c = mod(abs(v), 2.0); return c <= 1.0 ? c : 2.0 - c; }
+vec2 mirror(vec2 v) { return vec2(mirror(v.x), mirror(v.y)); }
+vec3 mirror(vec3 v) { return vec3(mirror(v.x), mirror(v.y), mirror(v.z)); }
+
+float easing(float t) { return t < 0.5 ? 2.0 * t * t : -1.0 + (4.0 - 2.0 * t) * t; }
+vec2 easing(vec2 t) { return vec2(easing(t.x), easing(t.y)); }
+vec3 easing(vec3 t) { return vec3(easing(t.x), easing(t.y), easing(t.z)); }
+
+vec3 layer1(vec3 point) {
+    vec3 v1 = easing(mirror(#3 * distance(point, #3 * 2.0 - 1.0) * 5.0 + #3));
+    vec3 v2 = easing(mirror(#3 * distance(point, #3 * 2.0 - 1.0) * 10.0 + #3));
+    vec3 v3 = easing(mirror(#3 * distance(point, #3 * 2.0 - 1.0) * 20.0 + #3));
+
+    return mix(v1, v2, v3);
 }
 
-function random(d) {
-    if (d === 1) {
-        return Math.random().toFixed(6);
+void main() {
+    float delta = length(v_point);
+    if (delta < 1.0) {
+        vec3 point = vec3(v_point, sqrt(1.0 - delta * delta));
+        vec3 source = vec3(-0.5, -2, -5);
+        vec3 light = normalize(point - source);
+        float alpha = (1.0 - delta) < u_pixelSize ? (1.0 - delta) / u_pixelSize : 1.0;
+        float ambient = 0.05;
+        float diffuse = max(0.0, dot(point, light));
+
+        vec3 tex = layer1(point); //+ sqrt(layer2(point) * layer3(point));
+        vec3 color = ambient + (0.4 + tex * 0.5) * diffuse;
+        gl_FragColor = vec4(pow(color, vec3(1.0 / 2.2)), alpha);
     } else {
-        let v = "";
-        for (let i = 0; i < d; i++) {
-            if (i) {
-                v += ", ";
-            }
-            v += Math.random().toFixed(6);
+        gl_FragColor = vec4(0);
+    }
+}`.replace(/#\d/g, (() => {
+    let i = 0,
+        v = () => `u_seed[${i++ % 64}]`;
+    return s => {
+        if (s === "#1") {
+            return v();
+        } else if (s === "#2") {
+            return `vec2(${v()}, ${v()})`;
+        } else if (s === "#3") {
+            return `vec3(${v()}, ${v()}, ${v()})`;
         }
-        return `${type(d)}(${v})`;
-    }
-}
-
-function randomConstant(dimentions) {
-    const f = `const_${nextId()}`,
-        t = type(dimentions);
-    return {
-        fn: f,
-        lib: `${t} ${f}(vec2 p) { return ${random(dimentions)}; }`
     };
-}
+})());
 
-function constant(d, value) {
-    if (d === 1) {
-        return value.toFixed(6);
-    } else {
-        return `${type(d)}(${value.toFixed(6)})`
-    }
-}
-
-function select(arr) {
-    return arr[Math.floor(Math.random() * arr.length)];
-}
-
-function randomTexture(dimentions, complexity) {
-    if (complexity < 1) {
-        return randomConstant(dimentions);
-    } else {
-        let r = Math.random();
-        if (r < 0.5 && complexity > 10) {
-            if (Math.random() < 0.99) {
-                const a = randomTexture(dimentions, complexity / 2),
-                    b = randomTexture(dimentions, complexity / 2),
-                    alpha = randomTexture(1, complexity / 2);
-                return blend(dimentions, a, b, alpha);
-            } else {
-                const v = randomTexture(dimentions, complexity / 2),
-                    point = randomTexture(2, complexity / 2);
-                return displace(dimentions, v, point);
-            }
-        } else if (r < 0.75 && complexity > 3) {
-            return select(transformers)(dimentions, randomTexture(dimentions, complexity - 1));
-        } else {
-            const a = randomTexture(dimentions, complexity / 2),
-                b = randomTexture(dimentions, complexity / 2);
-            return select(combinators)(dimentions, a, b);
-        }
-    }
-}
-
-////////////////////////////////////////////////
-// Complex combinations
-////////////////////////////////////////////////
-
-function displace(d, v, point) {
-    const f = `displace_${nextId()}`,
-        t = type(d);
-    return {
-        fn: f,
-        lib: `${v.lib}\n${point.lib}\n${t} ${f}(vec2 p) { return ${v.fn}(${point.fn}(p)); }`
-    };
-}
-
-function blend(d, a, b, alpha) {
-    const f = `blend_${nextId()}`,
-        t = type(d);
-    return {
-        fn: f,
-        lib: `${a.lib}\n${b.lib}\n${alpha.lib}\n${t} ${f}(vec2 p) { float a = ${alpha.fn}(p); return ${a.fn}(p) * a + ${b.fn}(p) * (1.0 - a); }`
-    };
-}
-
-////////////////////////////////////////////////
-// Combinators
-////////////////////////////////////////////////
-
-const combinators = [
-    //cMix1,
-    //cMixN,
-    cMixQuad,
-    //cMixPower
-];
-
-function cMix1(d, a, b) {
-    const f = `mix1_${nextId()}`,
-        t = type(d),
-        v = Math.random(),
-        v1 = v.toFixed(6),
-        v2 = (1 - v).toFixed(6);
-    return {
-        fn: f,
-        lib: `${a.lib}\n${b.lib}\n${t} ${f}(vec2 p) { return ${a.fn}(p) * ${v1} + ${b.fn}(p) * ${v2}; }`
-    };
-}
-
-function cMixN(d, a, b) {
-    const f = `mixN_${nextId()}`,
-        t = type(d),
-        v = Math.random(),
-        v1 = v.toFixed(6),
-        v2 = (1 - v).toFixed(6);
-    return {
-        fn: f,
-        lib: `${a.lib}\n${b.lib}\n${t} ${f}(vec2 p) { ${t} m = ${random(d)}; return ${a.fn}(p) * m + ${b.fn}(p) * (1.0 - m); }`
-    };
-}
-
-function cMixQuad(d, a, b) {
-    const f = `mixQuad_${nextId()}`,
-        t = type(d),
-        m = Math.random(),
-        v = `mirror(p.x * ${m.toFixed(6)} + p.y * ${(1 - m).toFixed(6)} - 0.5)`;
-    return {
-        fn: f,
-        lib: `${a.lib}\n${b.lib}\n${t} ${f}(vec2 p) { float v = ${v}; float w = v * v * 4.0; return ${a.fn}(p) * w + ${b.fn}(p) * (1.0 - w); }`
-    };
-}
-
-function cMixPower(d, a, b) {
-    const f = `mixPower_${nextId()}`,
-        t = type(d),
-        p1 = constant(d, Math.random() * 2.0 + 1.0),
-        p2 = constant(d, Math.random() * 2.0 + 1.0);
-    return {
-        fn: f,
-        lib: `${a.lib}\n${b.lib}\n${t} ${f}(vec2 p) { return pow(pow(${a.fn}(p), ${p1}) * pow(${b.fn}(p), ${p2}), 1.0 / (${p1} + ${p2})); }`
-    };
-}
-
-////////////////////////////////////////////////
-// Transformers
-////////////////////////////////////////////////
-
-const transformers = [
-    tShift,
-    tRotate,
-    tScale
-];
-
-function tShift(d, fn) {
-    const f = `shift_${nextId()}`,
-        t = type(d);
-    return {
-        fn: f,
-        lib: `${fn.lib}\n${t} ${f}(vec2 p) { return ${fn.fn}(/*mirror*/(p + ${random(2)})); }`
-    };
-}
-
-function tRotate(d, fn) {
-    const f = `rotate_${nextId()}`,
-        t = type(d),
-        a = Math.random() * Math.PI,
-        s = Math.sin(a),
-        c = Math.cos(a),
-        x = `/*mirror*/(p.x * (${c.toFixed(6)}) + p.y * (${s.toFixed(6)}) + 2.0)`,
-        y = `/*mirror*/(p.y * (${c.toFixed(6)}) - p.x * (${s.toFixed(6)}) + 2.0)`;
-    return {
-        fn: f,
-        lib: `${fn.lib}\n${t} ${f}(vec2 p) { return ${fn.fn}(vec2(${x}, ${y})); }`
-    };
-}
-
-function tScale(d, fn) {
-    const f = `scale_${nextId()}`,
-        t = type(d);
-    return {
-        fn: f,
-        lib: `${fn.lib}\n${t} ${f}(vec2 p) { return ${fn.fn}(mirror(p * 2.0)); }`
-    };
-}
+console.log(vertexSource);
+console.log(fragmentSource);
