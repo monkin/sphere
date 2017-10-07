@@ -188,14 +188,15 @@ void main() {
     float delta = length(v_point);
     if (delta < 1.0) {
         vec3 point = vec3(v_point, sqrt(1.0 - delta * delta));
+        vec3 tex = layer1(point);
         vec3 source = vec3(-2, -4, -5);
         vec3 light = normalize(point - source);
+        vec3 n = normalize(point + tex * 0.2 - 0.1);
         float alpha = (1.0 - delta) < u_pixelSize ? (1.0 - delta) / u_pixelSize : 1.0;
         float ambient = 0.05;
-        float diffuse = max(0.0, dot(point, light));
-        float specular = 0.5 * pow(max(0.0, dot(normalize(reflect(light, point)), vec3(0, 0, -1))), 30.0);
+        float diffuse = max(0.0, dot(n, light));
+        float specular = 0.5 * pow(max(0.0, dot(normalize(reflect(light, n)), vec3(0, 0, -1))), 30.0);
 
-        vec3 tex = layer1(point); //+ sqrt(layer2(point) * layer3(point));
         vec3 color = 0.08 + tex * 0.4 * (ambient + diffuse) + specular;
         gl_FragColor = vec4(pow(color, vec3(1.0 / 2.2)), alpha);
     } else {
