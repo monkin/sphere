@@ -34,7 +34,7 @@ gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), g
 
 function createStage() {
     const start = Date.now(),
-        STAGE_DURATION = 7000;
+        STAGE_DURATION = 10000;
     let now = start;
     return {
         next() {
@@ -195,7 +195,7 @@ void main() {
         float alpha = (1.0 - delta) < u_pixelSize ? (1.0 - delta) / u_pixelSize : 1.0;
         float ambient = 0.05;
         float diffuse = max(0.0, dot(n, light));
-        float specular = 0.5 * pow(max(0.0, dot(normalize(reflect(light, n)), vec3(0, 0, -1))), 30.0);
+        float specular = 0.6 * pow(max(0.0, dot(normalize(reflect(light, n)), vec3(0, 0, -1))), 15.0);
 
         vec3 color = 0.08 + tex * 0.4 * (ambient + diffuse) + specular;
         gl_FragColor = vec4(pow(color, vec3(1.0 / 2.2)), alpha);
