@@ -176,7 +176,7 @@ float easing(float t) { return t < 0.5 ? 2.0 * t * t : -1.0 + (4.0 - 2.0 * t) * 
 vec2 easing(vec2 t) { return vec2(easing(t.x), easing(t.y)); }
 vec3 easing(vec3 t) { return vec3(easing(t.x), easing(t.y), easing(t.z)); }
 
-vec3 layer1(vec3 point) {
+vec3 layer(vec3 point) {
     vec3 v1 = easing(mirror(#3 * distance(point, #3 * 2.0 - 1.0) * 5.0 + #3));
     vec3 v2 = easing(mirror(#3 * distance(point, #3 * 2.0 - 1.0) * 10.0 + #3));
     vec3 v3 = easing(mirror(#3 * distance(point, #3 * 2.0 - 1.0) * 20.0 + #3));
@@ -184,18 +184,24 @@ vec3 layer1(vec3 point) {
     return mix(v1, v2, v3);
 }
 
+vec3 rotateY(vec3 point, float angle) {
+    float s = sin(angle),
+        c = cos(angle);
+    return vec3(point.x * c - point.z * s, point.y, point.z * c + point.x * s);
+}
+
 void main() {
     float delta = length(v_point);
     if (delta < 1.0) {
         vec3 point = vec3(v_point, sqrt(1.0 - delta * delta));
-        vec3 tex = layer1(point);
+        vec3 tex = layer(rotateY(point, - u_time / 4000.0));
         vec3 source = vec3(-2, -4, -5);
         vec3 light = normalize(point - source);
         vec3 n = normalize(point + tex * 0.2 - 0.1);
         float alpha = (1.0 - delta) < u_pixelSize ? (1.0 - delta) / u_pixelSize : 1.0;
         float ambient = 0.05;
         float diffuse = max(0.0, dot(n, light));
-        float specular = 0.6 * pow(max(0.0, dot(normalize(reflect(light, n)), vec3(0, 0, -1))), 15.0);
+        float specular = 0.8 * pow(max(0.0, dot(normalize(reflect(light, n)), vec3(0, 0, -1))), 15.0);
 
         vec3 color = 0.08 + tex * 0.4 * (ambient + diffuse) + specular;
         gl_FragColor = vec4(pow(color, vec3(1.0 / 2.2)), alpha);
