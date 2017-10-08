@@ -29,6 +29,7 @@ const gl = canvas.getContext("webgl", { antialias: false, depth: false, premulti
 
 gl.enable(gl.BLEND);
 gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
 gl.bindBuffer(gl.ARRAY_BUFFER, points);
 gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
 
@@ -55,7 +56,7 @@ function createStage() {
     };
 }
 
-function compile() {
+function compile(vertexSource, fragmentSource) {
     let vshader = gl.createShader(gl.VERTEX_SHADER),
         fshader = gl.createShader(gl.FRAGMENT_SHADER),
         program = gl.createProgram();
@@ -84,7 +85,6 @@ function compile() {
     gl.enableVertexAttribArray(position);
     gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0);
 
-    gl.useProgram(program);
     return program;
 }
 
@@ -115,12 +115,13 @@ function randomSeed() {
 }
 
 setTimeout(async function() {
-    let program = compile(),
-        ratioLocation = gl.getUniformLocation(program, "u_ratio"),
-        pixelSizeLocation = gl.getUniformLocation(program, "u_pixelSize"),
-        timeLocation = gl.getUniformLocation(program, "u_time"),
-        seedLocation = gl.getUniformLocation(program, `u_seed`),
-        seedLocations = [],
+    let ballProgram = compile(ballVertexSource, ballFragmentSource),
+        bgProgram = compile(bgVertexSource, bgFragmentSource),
+        ballRatioLocation = gl.getUniformLocation(ballProgram, "u_ratio"),
+        ballPixelSizeLocation = gl.getUniformLocation(ballProgram, "u_pixelSize"),
+        ballTimeLocation = gl.getUniformLocation(ballProgram, "u_time"),
+        seedLocation = gl.getUniformLocation(ballProgram, `u_seed`),
+        bgRatioLocation = gl.getUniformLocation(bgProgram, "u_ratio"),
         start = Date.now(),
         seed1 = randomSeed(),
         seed2 = randomSeed();
@@ -134,13 +135,15 @@ setTimeout(async function() {
         while (await stage.next()) {
             resize();
             const time = Date.now() - start;
-            gl.clearColor(0.9, 0.9, 0.9, 1);
-            gl.clear(gl.COLOR_BUFFER_BIT);
-            
-            gl.uniform1f(ratioLocation, ratio);
-            gl.uniform1f(pixelSizeLocation, 1 / (Math.min(width, height) * 0.75));
-            gl.uniform1f(timeLocation, time);
 
+            gl.useProgram(bgProgram);
+            gl.uniform1f(bgRatioLocation, ratio);
+            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+            gl.useProgram(ballProgram);
+            gl.uniform1f(ballRatioLocation, ratio);
+            gl.uniform1f(ballPixelSizeLocation, 1 / (Math.min(width, height) * 0.75));
+            gl.uniform1f(ballTimeLocation, time);
             gl.uniform1fv(seedLocation, mix(seed1, seed2, easing(stage.time())));
 
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
@@ -148,18 +151,45 @@ setTimeout(async function() {
     }
 });
 
-const vertexSource = `
+const lightSource = "vec3(-2, -4, -5)";
+
+const bgVertexSource = `
+attribute vec2 a_point;
+varying vec2 v_point;
+uniform float u_ratio;
+void main() {
+    vec2 p = a_point * (1.0 / 0.8);
+    v_point = (u_ratio > 1.0
+        ? vec2(p.x * u_ratio, p.y)
+        : vec2(p.x, p.y / u_ratio)) * vec2(1.2, 2) + vec2(0, 1.35);
+    gl_Position = vec4(a_point, 0, 1);
+}`;
+
+const bgFragmentSource = `
+precision highp float;
+varying vec2 v_point;
+
+void main() {
+    float l = length(v_point);
+    if (l < 1.0) {
+        gl_FragColor = vec4(0.25 + 0.75 * vec3(l), 1);
+    } else {
+        gl_FragColor = vec4(1);
+    }
+}`;
+
+const ballVertexSource = `
 attribute vec2 a_point;
 varying vec2 v_point;
 uniform float u_ratio;
 void main() {
     v_point = a_point;
     gl_Position = u_ratio > 1.0
-            ? vec4(a_point.x / u_ratio * 0.85, a_point.y * 0.85, 0, 1)
-            : vec4(a_point.x * 0.85, a_point.y * u_ratio * 0.85, 0, 1);
+            ? vec4(a_point.x / u_ratio * 0.8, a_point.y * 0.8, 0, 1)
+            : vec4(a_point.x * 0.8, a_point.y * u_ratio * 0.8, 0, 1);
 }`;
 
-const fragmentSource = `
+const ballFragmentSource = `
 precision highp float;
 varying vec2 v_point;
 uniform float u_time;
@@ -195,7 +225,7 @@ void main() {
     if (delta < 1.0) {
         vec3 point = vec3(v_point, sqrt(1.0 - delta * delta));
         vec3 tex = layer(rotateY(point, - u_time / 4000.0));
-        vec3 source = vec3(-2, -4, -5);
+        vec3 source = ${lightSource};
         vec3 light = normalize(point - source);
         vec3 n = normalize(point + tex * 0.2 - 0.1);
         float alpha = (1.0 - delta) < u_pixelSize ? (1.0 - delta) / u_pixelSize : 1.0;
@@ -203,7 +233,7 @@ void main() {
         float diffuse = max(0.0, dot(n, light));
         float specular = 0.8 * pow(max(0.0, dot(normalize(reflect(light, n)), vec3(0, 0, -1))), 15.0);
 
-        vec3 color = 0.08 + tex * 0.4 * (ambient + diffuse) + specular;
+        vec3 color = 0.1 + tex * 0.4 * (ambient + diffuse) + specular;
         gl_FragColor = vec4(pow(color, vec3(1.0 / 2.2)), alpha);
     } else {
         gl_FragColor = vec4(0);
@@ -222,5 +252,5 @@ void main() {
     };
 })());
 
-console.log(vertexSource);
-console.log(fragmentSource);
+console.log(ballVertexSource);
+console.log(ballFragmentSource);
