@@ -3,10 +3,34 @@
     <head>
         <meta charset="utf-8">
         <title>Candy Ball Demo</title>
-        <style>html, body { padding: 0; margin: 0; overflow: hidden; width: 100%; height: 100%; }</style>
+        <style>
+            html, body { padding: 0; margin: 0; overflow: hidden; width: 100%; height: 100%; }
+            .like-button { position: fixed; left: 16px; top: 8px; z-index: 1; }
+            .star-button { position: fixed; right: 16px; top: 8px; z-index: 1; }
+        </style>
+        <meta property="og:url" content="https://monkin.github.io/sphere/" />
+        <meta property="og:type" content="article" />
+        <meta property="og:title" content="Candy Ball Demo" />
+        <meta property="og:description" content="Animated 3D sphere made with WebGL" />
+        <meta property="og:image" content="https://monkin.github.io/sphere/image.png" />
     </head>
     <body>
         <canvas></canvas>
         <script src="./index.js"></script>
+        <div class="like-button">
+            <div class="fb-like" data-href="https://monkin.github.io/sphere/" data-layout="standard" data-action="like" data-size="small" data-show-faces="false" data-share="true"></div>
+        </div>
+        <div class="star-button">
+            <a class="github-button" href="https://github.com/monkin/sphere" data-size="large" data-show-count="true" aria-label="Star monkin/sphere on GitHub">Star</a>
+        </div>
+        <div id="fb-root"></div>
+        <script>(function(d, s, id) {
+          var js, fjs = d.getElementsByTagName(s)[0];
+          if (d.getElementById(id)) return;
+          js = d.createElement(s); js.id = id;
+          js.src = "//connect.facebook.net/en_GB/sdk.js#xfbml=1&version=v2.10&appId=233188503766688";
+          fjs.parentNode.insertBefore(js, fjs);
+        }(document, 'script', 'facebook-jssdk'));</script>
+        <script async defer src="https://buttons.github.io/buttons.js"></script>
     </body>
 </html>
