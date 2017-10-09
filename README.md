@@ -1,1 +1,2 @@
-# Candy Ball Demo
+# Candy Ball
+[Working demo is here](https://monkin.github.io/sphere/)
