@@ -6,23 +6,17 @@ let resizeRequested = true,
     height = 0;
 
 function resize() {
-    if (resizeRequested) {
-        const w = document.body.clientWidth,
-            h = document.body.clientHeight,
-            px = window.devicePixelRatio || 1;
-        ratio = w / h;
-        width = w * px;
-        height = h * px;
+    const w = canvas.clientWidth,
+        h = canvas.clientHeight,
+        px = window.devicePixelRatio || 1;
+    ratio = w / h;
+    width = w * px;
+    height = h * px;
 
-        canvas.style.width = `${w}px`;
-        canvas.style.height = `${h}px`;
-        canvas.setAttribute("width", width.toFixed(0));
-        canvas.setAttribute("height", height.toFixed(0));
-        gl.viewport(0, 0, w * px, h * px);
-        resizeRequested = false;
-    }
+    canvas.setAttribute("width", width.toFixed(0));
+    canvas.setAttribute("height", height.toFixed(0));
+    gl.viewport(0, 0, width, height);
 }
-window.addEventListener("resize", () => resizeRequested = true);
 
 const gl = canvas.getContext("webgl", { antialias: false, depth: false, premultipliedAlpha: false }),
     points = gl.createBuffer();
