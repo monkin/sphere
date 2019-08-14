@@ -6,8 +6,8 @@ let resizeRequested = true,
     height = 0;
 
 function resize() {
-    const w = canvas.clientWidth,
-        h = canvas.clientHeight,
+    const w = window.innerWidth,
+        h = window.innerHeight,
         px = window.devicePixelRatio || 1;
     ratio = w / h;
     width = w * px;
