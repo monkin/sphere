@@ -1,24 +1,29 @@
+const root = document.querySelector("#root");
 const canvas = document.querySelector("canvas");
 
-let resizeRequested = true,
-    ratio = 1,
+let ratio = 1,
     width = 0,
     height = 0;
 
 function resize() {
-    const w = window.innerWidth,
-        h = window.innerHeight,
+    const w = root.scrollWidth,
+        h = root.scrollHeight,
         px = window.devicePixelRatio || 1;
     ratio = w / h;
     width = w * px;
     height = h * px;
 
-    canvas.setAttribute("width", width.toFixed(0));
-    canvas.setAttribute("height", height.toFixed(0));
-    gl.viewport(0, 0, width, height);
+    if (
+        canvas.getAttribute("width") !== width.toFixed(0) ||
+        canvas.getAttribute("height") !== height.toFixed(0)
+    ) {
+        canvas.setAttribute("width", width.toFixed(0));
+        canvas.setAttribute("height", height.toFixed(0));
+        gl.viewport(0, 0, width, height);
+    }
 }
 
-const gl = canvas.getContext("webgl", { antialias: false, depth: false, premultipliedAlpha: false }),
+const gl = canvas.getContext("webgl", {antialias: false, depth: false, premultipliedAlpha: false}),
     points = gl.createBuffer();
 
 gl.enable(gl.BLEND);
@@ -60,7 +65,7 @@ function compile(vertexSource, fragmentSource) {
 
     gl.shaderSource(fshader, fragmentSource);
     gl.compileShader(fshader);
-    
+
     gl.attachShader(program, vshader);
     gl.attachShader(program, fshader);
     gl.linkProgram(program);
@@ -86,7 +91,7 @@ function easing(time) {
     const SWITCH_TIME = 1 / 2;
     if (time < SWITCH_TIME) {
         const t = time / SWITCH_TIME;
-        return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) *t;
+        return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
     } else {
         return 1;
     }
@@ -108,7 +113,7 @@ function randomSeed() {
     return r;
 }
 
-setTimeout(async function() {
+setTimeout(async function () {
     let ballProgram = compile(ballVertexSource, ballFragmentSource),
         bgProgram = compile(bgVertexSource, bgFragmentSource),
         ballRatioLocation = gl.getUniformLocation(ballProgram, "u_ratio"),
